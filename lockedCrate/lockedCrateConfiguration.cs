@@ -13,6 +13,12 @@ namespace lockedCrate
         [XmlElement("SpawnTable")]
         public ushort SpawnTable { get; set; } = 1;
 
+        [XmlElement("ItemCountMin")]
+        public int ItemCountMin { get; set; } = 3;
+
+        [XmlElement("ItemCountMax")]
+        public int ItemCountMax { get; set; } = 5;
+
         [XmlElement("UnlockTimer")]
         public uint UnlockTimer { get; set; } = 15;
 
@@ -27,8 +33,8 @@ namespace lockedCrate
         {
             SpawnLocations = new List<Vector3Serializable>
             {
-                new Vector3Serializable(1, 1, 1),
-                new Vector3Serializable(2, 2, 2)
+                new Vector3Serializable(0, 46, 0),
+                new Vector3Serializable(10, 46, 10)
             };
         }
     }
