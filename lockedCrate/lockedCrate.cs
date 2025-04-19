@@ -5,7 +5,6 @@ using Rocket.Unturned.Player;
 using SDG.Unturned;
 using Steamworks;
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
 
@@ -20,8 +19,7 @@ namespace lockedCrate
             U.Events.OnPlayerConnected += OnPlayerConnected;
             BarricadeManager.onOpenStorageRequested += OnOpenStorageRequested;
 
-            SpawnLockedCrate();
-            Logger.Log("LockedCrate loaded.");
+            Logger.Log("LockedCrate loaded. Waiting for first player to spawn crate.");
         }
 
         protected override void Unload()
@@ -34,6 +32,7 @@ namespace lockedCrate
         {
             if (spawnedCrate == null)
             {
+                Logger.Log("First player connected, spawning crate...");
                 SpawnLockedCrate();
             }
         }
@@ -49,6 +48,13 @@ namespace lockedCrate
             var random = new System.Random();
             var location = Configuration.Instance.SpawnLocations[random.Next(Configuration.Instance.SpawnLocations.Count)].ToVector3();
 
+            byte x, y;
+            if (!Regions.tryGetCoordinate(location, out x, out y))
+            {
+                Logger.LogError("Invalid spawn location — outside of map bounds.");
+                return;
+            }
+
             var asset = Assets.find(EAssetType.ITEM, Configuration.Instance.CrateId);
             var crateAsset = asset as ItemBarricadeAsset;
             if (crateAsset == null)
@@ -58,8 +64,23 @@ namespace lockedCrate
             }
 
             var crate = new Barricade(crateAsset);
-            Transform transform = BarricadeManager.dropNonPlantedBarricade(crate, location, Quaternion.identity, 0, 0);
-            spawnedCrate = BarricadeManager.FindBarricadeByRootTransform(transform);
+
+            try
+            {
+                Transform transform = BarricadeManager.dropNonPlantedBarricade(crate, location, Quaternion.identity, 0, 0);
+                if (transform == null)
+                {
+                    Logger.LogError("Failed to drop barricade — transform is null.");
+                    return;
+                }
+
+                spawnedCrate = BarricadeManager.FindBarricadeByRootTransform(transform);
+                Logger.Log($"Locked crate spawned at {location}.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Exception while dropping barricade: {ex}");
+            }
         }
 
         private void OnOpenStorageRequested(CSteamID steamID, InteractableStorage storage, ref bool shouldAllow)
@@ -69,7 +90,8 @@ namespace lockedCrate
 
             if (storage.transform == spawnedCrate.model || storage.transform.IsChildOf(spawnedCrate.model))
             {
-                shouldAllow = false; // block opening the crate
+                shouldAllow = false; // Block opening the crate
+                Logger.Log($"Player [{steamID}] tried to open the locked crate — access denied.");
             }
         }
     }
