@@ -1,5 +1,6 @@
 ﻿using Rocket.API;
 using Rocket.Core.Plugins;
+using Rocket.Core.Utils;
 using Rocket.Unturned;
 using Rocket.Unturned.Player;
 using SDG.Unturned;
@@ -17,6 +18,8 @@ namespace lockedCrate
         private bool isCrateLocked = true;
         private bool unlockTimerStarted = false;
 
+        private Timer despawnTimer;
+
         protected override void Load()
         {
             U.Events.OnPlayerConnected += OnPlayerConnected;
@@ -29,6 +32,9 @@ namespace lockedCrate
         {
             U.Events.OnPlayerConnected -= OnPlayerConnected;
             BarricadeManager.onOpenStorageRequested -= OnOpenStorageRequested;
+
+            despawnTimer?.Stop();
+            despawnTimer?.Dispose();
         }
 
         private void OnPlayerConnected(UnturnedPlayer player)
@@ -82,12 +88,28 @@ namespace lockedCrate
 
                 Logger.Log($"Locked crate spawned at {location}.");
 
-                FillCrateWithItems();
+                StartDespawnTimer();
             }
             catch (Exception ex)
             {
                 Logger.LogError($"Exception while dropping barricade: {ex}");
             }
+        }
+
+        private void StartDespawnTimer()
+        {
+            despawnTimer?.Stop();
+            despawnTimer?.Dispose();
+
+            Logger.Log($"Despawn timer started ({Configuration.Instance.DespawnTimer}s).");
+
+            despawnTimer = new Timer(Configuration.Instance.DespawnTimer * 1000);
+            despawnTimer.AutoReset = false;
+            despawnTimer.Elapsed += (sender, args) =>
+            {
+                Logger.Log("Despawn timer finished. Crate would be removed now.");
+            };
+            despawnTimer.Start();
         }
 
         private void OnOpenStorageRequested(CSteamID steamID, InteractableStorage storage, ref bool shouldAllow)
@@ -114,7 +136,7 @@ namespace lockedCrate
                             isCrateLocked = false;
 
                             Logger.Log("Crate is now unlocked!");
-                            //FillCrateWithItems();
+                            FillCrateWithItems();
                         };
                         timer.AutoReset = false;
                         timer.Start();
@@ -133,46 +155,71 @@ namespace lockedCrate
 
         private void FillCrateWithItems()
         {
-            if (spawnedCrate?.interactable is InteractableStorage storage)
+            if (!(spawnedCrate?.interactable is InteractableStorage storage))
+                return;
+
+            ushort spawnTableID = Configuration.Instance.SpawnTable;
+
+            var spawnTableAsset = Assets.find(EAssetType.SPAWN, spawnTableID) as SpawnAsset;
+            if (spawnTableAsset == null)
             {
-                ushort spawnTableID = Configuration.Instance.SpawnTable;
-
-                var spawnTableAsset = Assets.find(EAssetType.SPAWN, spawnTableID) as SpawnAsset;
-                if (spawnTableAsset != null)
-                {
-                    Logger.Log($"Item spawn table ID valid: {spawnTableID}");
-                }
-                else
-                {
-                    Logger.LogError($"Invalid spawn table ID: {spawnTableID}");
-                    return;
-                }
-
-                Logger.Log($"spawnTableAsset"); // <<- DO NOT TOUCH
-
-                Logger.Log($"SpawnTableAsset hash: {spawnTableAsset.hash}");
-
-                var rand = new System.Random();
-                int count = rand.Next(Configuration.Instance.ItemCountMin, Configuration.Instance.ItemCountMax + 1);
-
-                Logger.Log($"Spawning {count} items from spawn table {spawnTableID} into crate...");
-
-                for (int i = 0; i < count; i++)
-                {
-                    var resolvedAsset = SpawnTableTool.Resolve(spawnTableAsset, EAssetType.ITEM, () => $"Spawning item {i + 1}");
-                    if (resolvedAsset is ItemAsset itemAsset)
-                    {
-                        var item = new Item(itemAsset.id, true);
-                        storage.items.tryAddItem(item);
-                    }
-                    else
-                    {
-                        Logger.LogError($"Resolved asset is not an ItemAsset for item {i + 1}");
-                    }
-                }
-
-                Logger.Log("Items successfully spawned in the crate.");
+                Logger.LogError($"Invalid spawn table ID: {spawnTableID}");
+                return;
             }
+
+            Logger.Log($"Item spawn table ID valid: {spawnTableID}");
+            Logger.Log($"SpawnTableAsset hash: {spawnTableAsset.hash}");
+
+            TaskDispatcher.QueueOnMainThread(() =>
+            {
+                var rand = new System.Random();
+                int targetCount = rand.Next(Configuration.Instance.ItemCountMin, Configuration.Instance.ItemCountMax + 1);
+                Logger.Log($"Target: spawn {targetCount} items into crate.");
+
+                int added = 0;
+                int attempts = 0;
+                int maxAttempts = targetCount * 5;
+
+                while (added < targetCount && attempts < maxAttempts)
+                {
+                    attempts++;
+
+                    try
+                    {
+                        var resolvedAsset = SpawnTableTool.Resolve(spawnTableAsset, EAssetType.ITEM, () => $"Item attempt {attempts}");
+
+                        if (resolvedAsset is ItemAsset itemAsset)
+                        {
+                            Logger.Log($"Attempt {attempts}: Trying to add {itemAsset.itemName} (ID: {itemAsset.id})");
+
+                            var item = new Item(itemAsset.id, true);
+                            bool success = storage.items.tryAddItem(item);
+
+                            if (success)
+                            {
+                                added++;
+                                Logger.Log($"Success! Added {itemAsset.itemName} (ID: {itemAsset.id}) [{added}/{targetCount}]");
+                            }
+                            else
+                            {
+                                Logger.LogWarning($"Attempt {attempts}: Not enough space for {itemAsset.itemName} (ID: {itemAsset.id})");
+                            }
+                        }
+                        else
+                        {
+                            Logger.LogWarning($"Attempt {attempts}: Resolved asset is not an ItemAsset.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"Exception during item spawn attempt {attempts}: {ex.Message}\n{ex.StackTrace}");
+                    }
+                }
+
+                int totalItems = storage.items.getItemCount();
+                Logger.Log($"Finished item spawning. Requested: {targetCount}, Successfully added: {added}, Storage now contains: {totalItems} items.");
+            });
         }
+
     }
 }
