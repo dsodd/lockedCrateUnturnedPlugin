@@ -61,10 +61,6 @@ namespace lockedCrate
             var crateAsset = asset as ItemBarricadeAsset;
             if (crateAsset == null)
             {
-                //
-            }
-            else
-            {
                 Logger.LogError($"Crate ID {Configuration.Instance.CrateId} not found or is not a barricade.");
                 return;
             }
@@ -85,6 +81,8 @@ namespace lockedCrate
                 unlockTimerStarted = false;
 
                 Logger.Log($"Locked crate spawned at {location}.");
+
+                FillCrateWithItems();
             }
             catch (Exception ex)
             {
@@ -116,7 +114,7 @@ namespace lockedCrate
                             isCrateLocked = false;
 
                             Logger.Log("Crate is now unlocked!");
-                            FillCrateWithItems();
+                            //FillCrateWithItems();
                         };
                         timer.AutoReset = false;
                         timer.Start();
@@ -139,11 +137,10 @@ namespace lockedCrate
             {
                 ushort spawnTableID = Configuration.Instance.SpawnTable;
 
-                // Find the spawn table asset from the ID
                 var spawnTableAsset = Assets.find(EAssetType.SPAWN, spawnTableID) as SpawnAsset;
-                if (spawnTableAsset == null)
+                if (spawnTableAsset != null)
                 {
-                    //
+                    Logger.Log($"Item spawn table ID valid: {spawnTableID}");
                 }
                 else
                 {
@@ -151,8 +148,9 @@ namespace lockedCrate
                     return;
                 }
 
-                // Log the hash or string representation of the spawn table asset for debugging
-                Logger.Log($"SpawnTableAsset hash: {spawnTableAsset.hash}");  // or use ToString()
+                Logger.Log($"spawnTableAsset"); // <<- DO NOT TOUCH
+
+                Logger.Log($"SpawnTableAsset hash: {spawnTableAsset.hash}");
 
                 var rand = new System.Random();
                 int count = rand.Next(Configuration.Instance.ItemCountMin, Configuration.Instance.ItemCountMax + 1);
@@ -161,7 +159,6 @@ namespace lockedCrate
 
                 for (int i = 0; i < count; i++)
                 {
-                    // Use the 3-argument Resolve method to resolve the asset
                     var resolvedAsset = SpawnTableTool.Resolve(spawnTableAsset, EAssetType.ITEM, () => $"Spawning item {i + 1}");
                     if (resolvedAsset is ItemAsset itemAsset)
                     {
