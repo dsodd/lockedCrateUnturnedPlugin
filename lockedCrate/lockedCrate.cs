@@ -14,6 +14,12 @@ namespace lockedCrate
 {
     public class LockedCrate : RocketPlugin<LockedCrateConfiguration>
     {
+        private readonly byte crateX;
+        private readonly byte crateY;
+        private readonly ushort cratePlant;
+        private readonly ushort crateIndex;
+        private BarricadeRegion crateRegion;
+
         private BarricadeDrop spawnedCrate;
         private bool isCrateLocked = true;
         private bool unlockTimerStarted = false;
@@ -107,7 +113,39 @@ namespace lockedCrate
             despawnTimer.AutoReset = false;
             despawnTimer.Elapsed += (sender, args) =>
             {
-                Logger.Log("Despawn timer finished. Crate would be removed now.");
+                // Run on main thread since we're interacting with Unity stuff
+                TaskDispatcher.QueueOnMainThread(() =>
+                {
+                    if (spawnedCrate == null)
+                    {
+                        Logger.LogWarning("Despawn timer triggered but no crate info available.");
+                        return;
+                    }
+
+                    BarricadeDrop drop = spawnedCrate;
+                    if (!BarricadeManager.tryGetRegion(drop.model, out byte x, out byte y, out ushort plant, out BarricadeRegion region))
+                    {
+                        Logger.LogError("Failed to find crate region during despawn.");
+                        return;
+                    }
+
+                    int index = region.drops.IndexOf(drop);
+                    if (index < 0)
+                    {
+                        Logger.LogError("Crate not found in region drops list.");
+                        return;
+                    }
+
+                    Logger.Log($"Despawning crate at region x:{x} y:{y}, plant:{plant}, index:{index}");
+
+                    BarricadeManager.destroyBarricade(region, x, y, plant, (ushort)index);
+                    spawnedCrate = null;
+                    isCrateLocked = true;
+                    unlockTimerStarted = false;
+
+                    // Optionally spawn a new crate immediately or let another timer/player trigger it
+                    Logger.Log("Crate successfully despawned.");
+                });
             };
             despawnTimer.Start();
         }
@@ -125,6 +163,13 @@ namespace lockedCrate
 
                     if (!unlockTimerStarted)
                     {
+                        // 🔴 Stop despawn timer
+                        despawnTimer?.Stop();
+                        despawnTimer?.Dispose();
+                        despawnTimer = null;
+
+                        Logger.Log("Despawn timer paused due to player interaction.");
+
                         unlockTimerStarted = true;
                         Logger.Log($"Player [{steamID}] triggered crate unlock timer ({Configuration.Instance.UnlockTimer}s).");
 
@@ -137,6 +182,7 @@ namespace lockedCrate
 
                             Logger.Log("Crate is now unlocked!");
                             FillCrateWithItems();
+                            StartDespawnTimer();
                         };
                         timer.AutoReset = false;
                         timer.Start();
@@ -145,10 +191,6 @@ namespace lockedCrate
                     {
                         Logger.Log($"Player [{steamID}] attempted to open crate — still locked.");
                     }
-                }
-                else
-                {
-                    Logger.Log($"Player [{steamID}] opened the unlocked crate.");
                 }
             }
         }
@@ -220,6 +262,5 @@ namespace lockedCrate
                 Logger.Log($"Finished item spawning. Requested: {targetCount}, Successfully added: {added}, Storage now contains: {totalItems} items.");
             });
         }
-
     }
 }
