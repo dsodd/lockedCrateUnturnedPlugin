@@ -1,14 +1,16 @@
 ﻿using Rocket.API;
+using Rocket.Unturned.Player;
 using Rocket.Core.Plugins;
 using Rocket.Core.Utils;
 using Rocket.Unturned;
-using Rocket.Unturned.Player;
+using Rocket.Unturned.Chat;
 using SDG.Unturned;
 using Steamworks;
 using System;
 using System.Timers;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
+using System.Xml.Serialization;
 
 namespace lockedCrate
 {
@@ -19,6 +21,7 @@ namespace lockedCrate
         private readonly ushort cratePlant;
         private readonly ushort crateIndex;
         private readonly BarricadeRegion crateRegion;
+        private Vector3 lastCrateLocation;
 
         private BarricadeDrop spawnedCrate;
         private bool isCrateLocked = true;
@@ -32,13 +35,15 @@ namespace lockedCrate
             U.Events.OnPlayerConnected += OnPlayerConnected;
             BarricadeManager.onOpenStorageRequested += OnOpenStorageRequested;
 
-            Logger.Log("LockedCrate loaded. Waiting for first player to spawn crate.");
+            Logger.Log("LockedCrate loaded.");
         }
 
         protected override void Unload()
         {
             U.Events.OnPlayerConnected -= OnPlayerConnected;
             BarricadeManager.onOpenStorageRequested -= OnOpenStorageRequested;
+
+            Logger.Log("LockedCrate unloaded.");
 
             despawnTimer?.Stop();
             despawnTimer?.Dispose();
@@ -48,7 +53,7 @@ namespace lockedCrate
         {
             if (spawnedCrate == null)
             {
-                Logger.Log("First player connected, spawning crate...");
+                DebugLog("First player connected, spawning crate...");
                 SpawnLockedCrate();
             }
         }
@@ -57,27 +62,31 @@ namespace lockedCrate
         {
             if (Configuration.Instance.SpawnLocations == null || Configuration.Instance.SpawnLocations.Count == 0)
             {
-                Logger.LogError("No spawn locations defined in configuration.");
+                DebugLogErr("No spawn locations defined in configuration.");
                 return;
             }
 
             var random = new System.Random();
-            var location = Configuration.Instance.SpawnLocations[random.Next(Configuration.Instance.SpawnLocations.Count)].ToVector3();
+            var randomLocation = Configuration.Instance.SpawnLocations[random.Next(Configuration.Instance.SpawnLocations.Count)];
+
+            Vector3 location = randomLocation.ToVector3();
+            string name = randomLocation.Name;
 
             if (!Regions.tryGetCoordinate(location, out byte x, out byte y))
             {
-                Logger.LogError("Invalid spawn location — outside of map bounds.");
+                DebugLogErr("Invalid spawn location — outside of map bounds.");
                 return;
             }
-
+            
             var asset = Assets.find(EAssetType.ITEM, Configuration.Instance.CrateId);
             var crateAsset = asset as ItemBarricadeAsset;
             if (crateAsset != null)
             {
                 //
-            } else
+            } 
+            else
             {
-                Logger.LogError($"Crate ID {Configuration.Instance.CrateId} not found or is not a barricade.");
+                DebugLogErr($"Crate ID {Configuration.Instance.CrateId} not found or is not a barricade.");
                 return;
             }
 
@@ -96,7 +105,8 @@ namespace lockedCrate
                 isCrateLocked = true;
                 unlockTimerStarted = false;
 
-                Logger.Log($"Locked crate spawned at {location}.");
+                Logger.Log($"Locked crate spawned at {name} ({location}).");
+                UnturnedChat.Say($"The Locked Crate has been spawned at {name}!");
 
                 StartDespawnTimer();
             }
@@ -111,7 +121,7 @@ namespace lockedCrate
             despawnTimer?.Stop();
             despawnTimer?.Dispose();
 
-            Logger.Log($"Despawn timer started ({Configuration.Instance.DespawnTimer}s).");
+            Logger.Log($"Despawn timer started ({(Configuration.Instance.DespawnTimer/60)} minutes).");
 
             despawnTimer = new Timer(Configuration.Instance.DespawnTimer * 1000)
             {
@@ -119,19 +129,19 @@ namespace lockedCrate
             };
             despawnTimer.Elapsed += (sender, args) =>
             {
-                // Run on main thread since we're interacting with Unity stuff
+                // run on main thread since we're interacting with Unity stuff
                 TaskDispatcher.QueueOnMainThread(() =>
                 {
                     if (spawnedCrate == null)
                     {
-                        Logger.LogWarning("Despawn timer triggered but no crate info available.");
+                        DebugLogWarn("Despawn timer triggered but no crate info available.");
                         return;
                     }
 
                     BarricadeDrop drop = spawnedCrate;
                     if (!BarricadeManager.tryGetRegion(drop.model, out byte x, out byte y, out ushort plant, out BarricadeRegion region))
                     {
-                        Logger.LogError("Failed to find crate region during despawn.");
+                        DebugLogErr("Failed to find crate region during despawn.");
                         return;
                     }
 
@@ -142,7 +152,7 @@ namespace lockedCrate
                         return;
                     }
 
-                    Logger.Log($"Despawning crate at region x:{x} y:{y}, plant:{plant}, index:{index}");
+                    DebugLog($"Despawning crate at region x:{x} y:{y}, plant:{plant}, index:{index}");
 
                     BarricadeManager.destroyBarricade(region, x, y, plant, (ushort)index);
                     StartRespawnTimer();
@@ -150,7 +160,7 @@ namespace lockedCrate
                     isCrateLocked = true;
                     unlockTimerStarted = false;
 
-                    Logger.Log("Crate successfully despawned.");
+                    UnturnedChat.Say($"The locked crate at {name} has despawned!");
                 });
             };
             despawnTimer.Start();
@@ -161,7 +171,7 @@ namespace lockedCrate
             respawnTimer?.Stop();
             respawnTimer?.Dispose();
 
-            Logger.Log($"Respawn timer started ({Configuration.Instance.RespawnTimerMin}s).");
+            DebugLog($"Respawn timer started ({(Configuration.Instance.DespawnTimer / 60)} minutes).");
 
             respawnTimer = new Timer(Configuration.Instance.RespawnTimerMin * 1000)
             {
@@ -172,9 +182,9 @@ namespace lockedCrate
                 // Run on main thread since we're interacting with Unity stuff
                 TaskDispatcher.QueueOnMainThread(() =>
                 {
-                    SpawnLockedCrate();
+                    DebugLog("Respawn timer ended!");
 
-                    Logger.Log("Respawn timer ended!");
+                    SpawnLockedCrate();
                 });
             };
             respawnTimer.Start();
@@ -198,10 +208,11 @@ namespace lockedCrate
                         despawnTimer?.Dispose();
                         despawnTimer = null;
 
-                        Logger.Log("Despawn timer paused due to player interaction.");
+                        DebugLog("Despawn timer paused due to player interaction.");
 
                         unlockTimerStarted = true;
-                        Logger.Log($"Player [{steamID}] triggered crate unlock timer ({Configuration.Instance.UnlockTimer}s).");
+                        DebugLog($"Player [{steamID}] triggered crate unlock timer ({(Configuration.Instance.DespawnTimer / 60)} minutes).");
+                        SendAreaMessage(spawnedCrate, $"The crate will be unlocked in {(Configuration.Instance.DespawnTimer / 60)} minutes!");
 
                         Timer timer = new Timer(Configuration.Instance.UnlockTimer * 1000);
                         timer.Elapsed += (sender, args) =>
@@ -210,7 +221,8 @@ namespace lockedCrate
                             timer.Dispose();
                             isCrateLocked = false;
 
-                            Logger.Log("Crate is now unlocked!");
+                            DebugLog($"The crate at {name} is now unlocked!");
+                            
                             FillCrateWithItems();
                             StartDespawnTimer();
                         };
@@ -219,7 +231,8 @@ namespace lockedCrate
                     }
                     else
                     {
-                        Logger.Log($"Player [{steamID}] attempted to open crate — still locked.");
+                        DebugLog($"Player [{steamID}] attempted to open crate — still locked.");
+                        SendAreaMessage(spawnedCrate, $"The crate unlock timer has already begun, total time is {(Configuration.Instance.DespawnTimer / 60)} minutes.");
                     }
                 }
             }
@@ -236,20 +249,21 @@ namespace lockedCrate
             if (spawnTableAsset != null)
             {
                 //
-            } else
+            } 
+            else
             {
-                Logger.LogError($"Invalid spawn table ID: {spawnTableID}");
+                DebugLogErr($"Invalid spawn table ID: {spawnTableID}");
                 return;
             }
 
-            Logger.Log($"Item spawn table ID valid: {spawnTableID}");
-            Logger.Log($"SpawnTableAsset hash: {spawnTableAsset.hash}");
+            DebugLog($"Item spawn table ID valid: {spawnTableID}");
+            DebugLog($"SpawnTableAsset hash: {spawnTableAsset.hash}");
 
             TaskDispatcher.QueueOnMainThread(() =>
             {
                 var rand = new System.Random();
                 int targetCount = rand.Next(Configuration.Instance.ItemCountMin, Configuration.Instance.ItemCountMax + 1);
-                Logger.Log($"Target: spawn {targetCount} items into crate.");
+                DebugLog($"Target: spawn {targetCount} items into crate.");
 
                 int added = 0;
                 int attempts = 0;
@@ -265,7 +279,7 @@ namespace lockedCrate
 
                         if (resolvedAsset is ItemAsset itemAsset)
                         {
-                            Logger.Log($"Attempt {attempts}: Trying to add {itemAsset.itemName} (ID: {itemAsset.id})");
+                            DebugLog($"Attempt {attempts}: Trying to add {itemAsset.itemName} (ID: {itemAsset.id})");
 
                             var item = new Item(itemAsset.id, true);
                             bool success = storage.items.tryAddItem(item);
@@ -273,16 +287,16 @@ namespace lockedCrate
                             if (success)
                             {
                                 added++;
-                                Logger.Log($"Success! Added {itemAsset.itemName} (ID: {itemAsset.id}) [{added}/{targetCount}]");
+                                DebugLog($"Success! Added {itemAsset.itemName} (ID: {itemAsset.id}) [{added}/{targetCount}]");
                             }
                             else
                             {
-                                Logger.LogWarning($"Attempt {attempts}: Not enough space for {itemAsset.itemName} (ID: {itemAsset.id})");
+                                DebugLogWarn($"Attempt {attempts}: Not enough space for {itemAsset.itemName} (ID: {itemAsset.id})");
                             }
                         }
                         else
                         {
-                            Logger.LogWarning($"Attempt {attempts}: Resolved asset is not an ItemAsset.");
+                            DebugLogWarn($"Attempt {attempts}: Resolved asset is not an ItemAsset.");
                         }
                     }
                     catch (Exception ex)
@@ -293,7 +307,55 @@ namespace lockedCrate
 
                 int totalItems = storage.items.getItemCount();
                 Logger.Log($"Finished item spawning. Requested: {targetCount}, Successfully added: {added}, Storage now contains: {totalItems} items.");
+
+                SendAreaMessage(spawnedCrate, $"The crate is now unlocked!");
             });
+        }
+
+        private void DebugLog(string logMessage)
+        {
+            if ( Configuration.Instance.DebugLogs == true )
+            {
+                string logMessage1 = "[Debug] " + logMessage;
+                Logger.Log(logMessage1);
+            }
+        }
+
+        private void DebugLogWarn(string logMessage)
+        {
+            if ( Configuration.Instance.DebugLogs == true)
+            {
+                string logMessage1 = "[Warn] " + logMessage;
+                Logger.LogWarning(logMessage1);
+            }
+        }
+
+        private void DebugLogErr(string logMessage)
+        {
+            if ( Configuration.Instance.DebugLogs == true)
+            {
+                string logMessage1 = "[Error] " + logMessage;
+                Logger.LogError(logMessage1);
+            }
+        }
+
+        private void SendAreaMessage(BarricadeDrop barricadeDrop, string message, float? preRadius = null)
+        {
+            float radius = preRadius ?? Configuration.Instance.AreaMessageDistance;
+
+            Vector3 cratePosition = barricadeDrop.model.transform.position;
+
+            foreach (var player in Provider.clients)
+            {
+                UnturnedPlayer unturnedPlayer = UnturnedPlayer.FromSteamPlayer(player);
+
+                if (Vector3.Distance(unturnedPlayer.Position, cratePosition) <= radius)
+                {
+                    Logger.Log($"Checking player {unturnedPlayer.CharacterName}, distance: {Vector3.Distance(unturnedPlayer.Position, cratePosition)}");
+
+                    UnturnedChat.Say(unturnedPlayer, message);
+                }
+            }
         }
     }
 }
