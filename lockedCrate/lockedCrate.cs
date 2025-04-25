@@ -18,7 +18,7 @@ namespace lockedCrate
         private readonly byte crateY;
         private readonly ushort cratePlant;
         private readonly ushort crateIndex;
-        private BarricadeRegion crateRegion;
+        private readonly BarricadeRegion crateRegion;
 
         private BarricadeDrop spawnedCrate;
         private bool isCrateLocked = true;
@@ -71,7 +71,10 @@ namespace lockedCrate
 
             var asset = Assets.find(EAssetType.ITEM, Configuration.Instance.CrateId);
             var crateAsset = asset as ItemBarricadeAsset;
-            if (crateAsset == null)
+            if (crateAsset != null)
+            {
+                //
+            } else
             {
                 Logger.LogError($"Crate ID {Configuration.Instance.CrateId} not found or is not a barricade.");
                 return;
@@ -109,8 +112,10 @@ namespace lockedCrate
 
             Logger.Log($"Despawn timer started ({Configuration.Instance.DespawnTimer}s).");
 
-            despawnTimer = new Timer(Configuration.Instance.DespawnTimer * 1000);
-            despawnTimer.AutoReset = false;
+            despawnTimer = new Timer(Configuration.Instance.DespawnTimer * 1000)
+            {
+                AutoReset = false
+            };
             despawnTimer.Elapsed += (sender, args) =>
             {
                 // Run on main thread since we're interacting with Unity stuff
@@ -162,7 +167,7 @@ namespace lockedCrate
 
                     if (!unlockTimerStarted)
                     {
-                        // 🔴 Stop despawn timer
+                        // stop despawn timer
                         despawnTimer?.Stop();
                         despawnTimer?.Dispose();
                         despawnTimer = null;
@@ -202,7 +207,10 @@ namespace lockedCrate
             ushort spawnTableID = Configuration.Instance.SpawnTable;
 
             var spawnTableAsset = Assets.find(EAssetType.SPAWN, spawnTableID) as SpawnAsset;
-            if (spawnTableAsset == null)
+            if (spawnTableAsset != null)
+            {
+                //
+            } else
             {
                 Logger.LogError($"Invalid spawn table ID: {spawnTableID}");
                 return;
