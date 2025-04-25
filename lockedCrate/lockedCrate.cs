@@ -143,7 +143,6 @@ namespace lockedCrate
                     isCrateLocked = true;
                     unlockTimerStarted = false;
 
-                    // Optionally spawn a new crate immediately or let another timer/player trigger it
                     Logger.Log("Crate successfully despawned.");
                 });
             };
