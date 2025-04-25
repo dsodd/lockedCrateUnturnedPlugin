@@ -26,16 +26,16 @@
 </LockedCrateConfiguration>
 ```
 ## Config/values explanations and docs
-- <CrateId> - Defines the storage asset that should be used by the plugin to store the items in.
-- <SpawnTable> - Defines the Unturned spawntable that will be used to add loot to the crate.
-- <ItemCountMin> - Minimum item amout that will spawn.
-- <ItemCountMax> - Maximum item amout that will spawn.
-- <UnlockTimer> - The amout of time it will take for the crate to unlock after its first interacted with. (seconds)
-- <RespawnTimerMin> - Minimum amout of time a crate will take to respawn. (seconds)
-- <RespawnTimerMax> - Maximum amout of time a crate will take to respawn. (seconds)
-- <DespawnTimer> - This timer is started as soon as a crate spawns, stopped while its being unlocked and restarted after the unlocking, once it reaches 0, the crate is destroyed. (seconds)
-- <SpawnLocations> - Defines a list of all locations where a crate can spawn at random.
-- <Location> - Sections off each specific location. The <x>, <y> and <z> and the coordinates of where it should spawn in the map.
+- `<CrateId>` - Defines the storage asset that should be used by the plugin to store the items in.
+- `<SpawnTable>` - Defines the Unturned spawntable that will be used to add loot to the crate.
+- `<ItemCountMin>` - Minimum item amout that will spawn.
+- `<ItemCountMax>` - Maximum item amout that will spawn.
+- `<UnlockTimer>` - The amout of time it will take for the crate to unlock after its first interacted with. (seconds)
+- `<RespawnTimerMin>` - Minimum amout of time a crate will take to respawn. (seconds)
+- `<RespawnTimerMax>` - Maximum amout of time a crate will take to respawn. (seconds)
+- `<DespawnTimer>` - This timer is started as soon as a crate spawns, stopped while its being unlocked and restarted after the unlocking, once it reaches 0, the crate is destroyed. (seconds)
+- `<SpawnLocations>` - Defines a list of all locations where a crate can spawn at random.
+- `<Location>` - Sections off each specific location. The `<x>`, `<y>` and `<z>` and the coordinates of where it should spawn in the map.
 ## Notes
 - This plugin still needs fine tuning and is nowhere near perfect so if you have any suggestions/bug reports please feel free to contact me on discord. (user: dsodd)
 - There are a few obvious flaws that I will start working on asap as I've noticed them myself.
