@@ -10,19 +10,11 @@ using System;
 using System.Timers;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
-using System.Xml.Serialization;
 
 namespace lockedCrate
 {
     public class LockedCrate : RocketPlugin<LockedCrateConfiguration>
     {
-        private readonly byte crateX;
-        private readonly byte crateY;
-        private readonly ushort cratePlant;
-        private readonly ushort crateIndex;
-        private readonly BarricadeRegion crateRegion;
-        private Vector3 lastCrateLocation;
-
         private BarricadeDrop spawnedCrate;
         private bool isCrateLocked = true;
         private bool unlockTimerStarted = false;
@@ -51,10 +43,40 @@ namespace lockedCrate
 
         private void OnPlayerConnected(UnturnedPlayer player)
         {
+            ClearAllCratesById();
+
             if (spawnedCrate == null)
             {
                 DebugLog("First player connected, spawning crate...");
-                SpawnLockedCrate();
+                StartRespawnTimer();
+            }
+        }
+
+        private void ClearAllCratesById()
+        {
+            ushort crateId = Configuration.Instance.CrateId;
+
+            for (byte x = 0; x < BarricadeManager.BARRICADE_REGIONS; x++)
+            {
+                for (byte y = 0; y < BarricadeManager.BARRICADE_REGIONS; y++)
+                {
+                    BarricadeRegion region = BarricadeManager.regions[x, y];
+                    if (region == null || region.drops == null) continue;
+
+                    for (int i = region.drops.Count - 1; i >= 0; i--)
+                    {
+                        var drop = region.drops[i];
+                        if (drop.asset.id == crateId)
+                        {
+                            byte dropX = (byte)drop.model.transform.position.x;
+                            byte dropY = (byte)drop.model.transform.position.y;
+                            ushort dropInstanceID = (ushort)drop.model.transform.GetInstanceID();
+
+                            BarricadeManager.destroyBarricade(region, dropX, dropY, drop.asset.id, dropInstanceID);
+                            DebugLog($"Destroyed crate with ID {crateId} at {drop.model.transform.position}");
+                        }
+                    }
+                }
             }
         }
 
