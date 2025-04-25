@@ -7,45 +7,55 @@ namespace lockedCrate
 {
     public class LockedCrateConfiguration : IRocketPluginConfiguration
     {
+        [XmlElement("DebugLogs")]
+        public bool DebugLogs { get; set; } = true;
+
+        [XmlElement("AreaMessageDistance")]
+        public float AreaMessageDistance { get; set; } = 100f;
+
         [XmlElement("CrateId")]
-        public ushort CrateId { get; set; } = 366; // the id of the crate that will be spawned in
+        public ushort CrateId { get; set; } = 366;
 
         [XmlElement("SpawnTable")]
-        public ushort SpawnTable { get; set; } = 1; // the id of the spawntable to be used for the loot
+        public ushort SpawnTable { get; set; } = 1;
 
         [XmlElement("ItemCountMin")]
-        public int ItemCountMin { get; set; } = 3; // minimum item count
-
+        public int ItemCountMin { get; set; } = 3;
+        
         [XmlElement("ItemCountMax")]
-        public int ItemCountMax { get; set; } = 5; // maximum item count
+        public int ItemCountMax { get; set; } = 5;
 
         [XmlElement("UnlockTimer")]
-        public uint UnlockTimer { get; set; } = 15; // duration of the lock after the crate is first interacted with
+        public uint UnlockTimer { get; set; } = 15;
 
         [XmlElement("RespawnTimerMin")]
-        public uint RespawnTimerMin { get; set; } = 30; // min duration of how long it should take for the new crate to be spawned
+        public uint RespawnTimerMin { get; set; } = 30;
 
         [XmlElement("RespawnTimerMax")]
-        public uint RespawnTimerMax { get; set; } = 30; // same as above but max
+        public uint RespawnTimerMax { get; set; } = 30;
+
         [XmlElement("DespawnTimer")]
-        public uint DespawnTimer { get; set; } = 30; // how long the crate will take to despawn if not looted after its unlocked
+        public uint DespawnTimer { get; set; } = 30;
 
         [XmlArray("SpawnLocations")]
         [XmlArrayItem("Location")]
-        public List<Vector3Serializable> SpawnLocations { get; set; } // spawn locations for the crates
+        public List<SpawnLocation> SpawnLocations { get; set; }
 
         public void LoadDefaults()
         {
-            SpawnLocations = new List<Vector3Serializable>
+            SpawnLocations = new List<SpawnLocation>
             {
-                new Vector3Serializable(0, 46, 0),
-                new Vector3Serializable(10, 46, 10)
+                new SpawnLocation("First Location", 0, 46, 0),
+                new SpawnLocation("Second Location", 10, 46, 10)
             };
         }
     }
 
-    public class Vector3Serializable
+    public class SpawnLocation
     {
+        [XmlAttribute("name")]
+        public string Name { get; set; }
+
         [XmlElement("x")]
         public float X { get; set; }
 
@@ -55,18 +65,16 @@ namespace lockedCrate
         [XmlElement("z")]
         public float Z { get; set; }
 
-        public Vector3Serializable() { }
+        public SpawnLocation() { }
 
-        public Vector3Serializable(float x, float y, float z)
+        public SpawnLocation(string name, float x, float y, float z)
         {
+            Name = name;
             X = x;
             Y = y;
             Z = z;
         }
 
         public Vector3 ToVector3() => new Vector3(X, Y, Z);
-
-        public static Vector3Serializable FromVector3(Vector3 vector) =>
-            new Vector3Serializable(vector.x, vector.y, vector.z);
     }
 }
