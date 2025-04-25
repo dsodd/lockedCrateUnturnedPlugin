@@ -25,6 +25,7 @@ namespace lockedCrate
         private bool unlockTimerStarted = false;
 
         private Timer despawnTimer;
+        private Timer respawnTimer;
 
         protected override void Load()
         {
@@ -144,6 +145,7 @@ namespace lockedCrate
                     Logger.Log($"Despawning crate at region x:{x} y:{y}, plant:{plant}, index:{index}");
 
                     BarricadeManager.destroyBarricade(region, x, y, plant, (ushort)index);
+                    StartRespawnTimer();
                     spawnedCrate = null;
                     isCrateLocked = true;
                     unlockTimerStarted = false;
@@ -152,6 +154,30 @@ namespace lockedCrate
                 });
             };
             despawnTimer.Start();
+        }
+
+        private void StartRespawnTimer()
+        {
+            respawnTimer?.Stop();
+            respawnTimer?.Dispose();
+
+            Logger.Log($"Respawn timer started ({Configuration.Instance.RespawnTimerMin}s).");
+
+            respawnTimer = new Timer(Configuration.Instance.RespawnTimerMin * 1000)
+            {
+                AutoReset = false
+            };
+            respawnTimer.Elapsed += (sender, args) =>
+            {
+                // Run on main thread since we're interacting with Unity stuff
+                TaskDispatcher.QueueOnMainThread(() =>
+                {
+                    SpawnLockedCrate();
+
+                    Logger.Log("Respawn timer ended!");
+                });
+            };
+            respawnTimer.Start();
         }
 
         private void OnOpenStorageRequested(CSteamID steamID, InteractableStorage storage, ref bool shouldAllow)
